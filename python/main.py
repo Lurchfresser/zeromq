@@ -1,21 +1,24 @@
 import zmq
 import threading
-import msgpack
 import time
 import random
 
-def worker(context,worker_id):
-    socket = context.socket(zmq.REP)
-    socket.connect("tcp://127.0.0.1:5558")
+def worker(context:zmq.SyncContext,worker_id):
+    req_socket = context.socket(zmq.REQ)
+    req_socket.connect("tcp://127.0.0.1:5556")
+    push_socket = context.socket(zmq.PUSH)
+    push_socket.connect("tcp://127.0.0.1:5557")
     accepted = 0
     
     while True:
-        message = socket.recv()
-        data = msgpack.unpackb(message)
+        request = f"work request from worker {worker_id}"
+        req_socket.send(request.encode(),0)
+        message = req_socket.recv()
+        data = message
         accepted += 1
-        reply = (f"Worker {worker_id} received: {data}, total accepted: {accepted}")
-        time.sleep((worker_id +1) * 10)
-        socket.send_string(reply)
+        work = (f"{data} and now proccesed")
+        time.sleep((worker_id +1) * 5)
+        push_socket.send(work.encode(),0)
         
 
 

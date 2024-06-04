@@ -1,8 +1,8 @@
-extern crate zmq;
-extern crate serde;
 extern crate rmp_serde;
+extern crate serde;
+extern crate zmq;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::thread;
 use std::time::Duration;
 
@@ -14,18 +14,27 @@ struct Message {
 
 fn main() {
     let context = zmq::Context::new();
-    let socket = context.socket(zmq::REQ).unwrap();
-    socket.connect("tcp://127.0.0.1:5557").unwrap();
+    let rep_socket = context.socket(zmq::REP).unwrap();
+    rep_socket.connect("tcp://localhost:5555").unwrap();
+    let pull_socket = context.socket(zmq::PULL).unwrap();
+    pull_socket.bind("tcp://*:5557").unwrap();
 
-    for i in 0..20 {
-        let message = Message {
-            id: i,
-            content: format!("Message {}", i),
-        };
-        let serialized = rmp_serde::to_vec(&message).unwrap();
-        socket.send(&serialized, 0).unwrap();
-        println!("Sent: {:?}", message);
-        let string = socket.recv_string(0).unwrap().unwrap();
-        println!("Received: {}", string);
+    let poll_items = &mut [
+        rep_socket.as_poll_item(zmq::POLLIN),
+        pull_socket.as_poll_item(zmq::POLLIN),
+    ];
+
+    loop {
+        zmq::poll(poll_items, -1).unwrap();
+        if poll_items[0].is_readable() {
+            let received = rep_socket.recv_string(0).unwrap().unwrap();
+            let message = &(format!("Received: {:?}", received))[..];
+            rep_socket.send(message, 0).unwrap();
+            println!("Sent: {:?}", message);
+        }
+        if poll_items[1].is_readable() {
+            let received = pull_socket.recv_string(0).unwrap().unwrap();
+            println!("{:?} and received again", received);
+        }
     }
 }
