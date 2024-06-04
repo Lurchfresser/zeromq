@@ -4,25 +4,27 @@ import msgpack
 import time
 import random
 
-def worker(worker_id, sleep):
-    context = zmq.Context()
-    pull_socket = context.socket(zmq.PULL)
-    pull_socket.connect("tcp://127.0.0.1:5557")
+def worker(context,worker_id):
+    socket = context.socket(zmq.REP)
+    socket.connect("tcp://127.0.0.1:5558")
     accepted = 0
     
     while True:
-        message = pull_socket.recv()
+        message = socket.recv()
         data = msgpack.unpackb(message)
         accepted += 1
-        print(f"Worker {worker_id} received: {data}, total accepted: {accepted}")
-        time.sleep(sleep * 2)
+        reply = (f"Worker {worker_id} received: {data}, total accepted: {accepted}")
+        time.sleep((worker_id +1) * 10)
+        socket.send_string(reply)
+        
 
 
 def main():
     num_workers = 3
     threads = []
+    context = zmq.Context()
     for i in range(num_workers):
-        thread = threading.Thread(target=worker, args=(i,i+1,))
+        thread = threading.Thread(target=worker, args=(context,i,))
         threads.append(thread)
         thread.start()
 
